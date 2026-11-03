@@ -159,7 +159,7 @@
       E.close();
       return;
     }
-    stopTimer();
+    // 不暂停计时：真实比赛里时间不会等人
     U.confirm({
       title: '结束本次训练？',
       text: '当前训练尚未完成，中途退出不会保存成绩。',
@@ -167,12 +167,7 @@
       cancel: '继续训练',
       danger: true
     }).then(function (yes) {
-      if (yes) { E.close(); }
-      else if (session) {
-        // 恢复计时（简单处理：继续剩余时间不精确，直接重置为剩余阶段）
-        if (session.phase === 'memorize') resumeMemo();
-        else resumeRecall();
-      }
+      if (yes) E.close();
     });
   };
 
@@ -304,11 +299,6 @@
     }
   }
 
-  function resumeMemo() {
-    // 简化的恢复：直接从当前已用时间继续（倒计时剩余未知时重置为本段）
-    renderMemo();
-  }
-
   function finishMemo(usedMs) {
     stopTimer();
     session.memoMs = usedMs || elapsedNow();
@@ -369,8 +359,6 @@
       renderResult(game.judge(data, ans, cfg));
     }
   }
-
-  function resumeRecall() { renderRecall(); }
 
   /* ---------- 结算 ---------- */
   function renderResult(result) {
