@@ -4,6 +4,8 @@
 
 官方 App「脑力大师」由世界记忆运动理事会推出，但只提供 Android / 平板 / 电脑版本 —— iOS 版从 2022 年发布起就一直写着"敬请期待"。这个项目把它搬进浏览器：**iPhone 上打开 Safari 就能用，数据只存在你自己的设备里。**
 
+**在线使用** → https://gmiantiao.github.io/memory-master/
+
 ---
 
 ## 为什么是网页
