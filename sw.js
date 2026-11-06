@@ -4,7 +4,7 @@
    ============================================================ */
 'use strict';
 
-var CACHE = 'memory-master-v1';
+var CACHE = 'memory-master-v2';
 
 var ASSETS = [
   './',

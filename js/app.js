@@ -406,6 +406,7 @@
     box.appendChild(toggleRow('音效', 'sound', '阶段切换与倒计时的提示音'));
     box.appendChild(toggleRow('震动反馈', 'haptics', '填牌等操作时的轻震（部分安卓设备支持）'));
     box.appendChild(toggleRow('显示逐项复查', 'showReview', '结算页列出每一行的对错对照'));
+    box.appendChild(toggleRow('全屏沉浸模式', 'immersive', '训练时只显示题目；点击屏幕显示控制栏'));
 
     box.appendChild(U.el('div', {
       style: { marginTop: '20px', fontSize: '11px', color: 'var(--faint)', lineHeight: '1.7' },

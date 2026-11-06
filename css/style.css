@@ -533,6 +533,29 @@ a { color: var(--accent); text-decoration: none; }
   line-height: 1.4;
 }
 
+/* 沉浸模式：控制栏浮在题目之上，隐藏时题目占满整屏 */
+.play.immersive .play-head,
+.play.immersive .play-foot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  background: rgba(10, 13, 19, 0.94);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+}
+.play.immersive .play-head { top: 0; transform: translateY(-8px); }
+.play.immersive .play-foot { bottom: 0; transform: translateY(8px); }
+/* In the memory phase, leave only the task itself on screen */
+.play.immersive .memo-wrap .memo-badge { display: none; }
+.play.immersive.controls-visible .play-head,
+.play.immersive.controls-visible .play-foot {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
 /* ============================================================
    设置面板
    ============================================================ */
@@ -620,6 +643,47 @@ a { color: var(--accent); text-decoration: none; }
   width: 6px; height: 6px; border-radius: 50%;
   background: #052019;
 }
+
+/* 训练模式开关 */
+.mode-toggle {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: var(--r);
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.022);
+  text-align: left;
+  margin-bottom: 22px;
+  transition: 0.18s;
+}
+.mode-toggle:hover { background: rgba(255, 255, 255, 0.05); border-color: var(--line-strong); }
+.mode-toggle.on {
+  border-color: rgba(53, 214, 160, 0.45);
+  background: linear-gradient(160deg, rgba(53, 214, 160, 0.10), rgba(53, 214, 160, 0.03));
+}
+.mode-title { font-size: 14px; font-weight: 600; }
+.mode-desc { font-size: 12px; color: var(--dim); margin-top: 3px; line-height: 1.45; }
+.mode-knob {
+  width: 38px; height: 22px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.14);
+  position: relative;
+  flex: none;
+  transition: 0.2s;
+}
+.mode-knob::after {
+  content: "";
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: 0.2s;
+}
+.mode-toggle.on .mode-knob { background: var(--accent); }
+.mode-toggle.on .mode-knob::after { transform: translateX(16px); }
 
 /* ============================================================
    记忆阶段 —— 数字网格
@@ -731,8 +795,11 @@ a { color: var(--accent); text-decoration: none; }
    ============================================================ */
 .pcard {
   position: relative;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.02em;
   border-radius: 7px;
   background: linear-gradient(170deg, #f8fafc, #e3e9f1);
   color: #10151d;
@@ -748,16 +815,14 @@ a { color: var(--accent); text-decoration: none; }
   line-height: 1;
 }
 .pcard .r {
-  position: absolute;
-  top: 4%; left: 10%;
-  font-size: 0.82em;
-  letter-spacing: -0.06em;
+  font-size: 0.78em;
+  letter-spacing: -0.04em;
   line-height: 1;
 }
 .pcard .s {
-  font-size: 1.02em;
+  font-size: 1.18em;
+  line-height: 1;
   opacity: 0.95;
-  margin-top: 0.1em;
 }
 .pcard.red { color: #d8232a; }
 .pcard.black { color: #161b24; }
@@ -831,7 +896,7 @@ a { color: var(--accent); text-decoration: none; }
   color: var(--txt-2);
   touch-action: manipulation;
 }
-.suit-tab .ss { font-size: 18px; line-height: 1; }
+.suit-tab .ss { font-size: 22px; line-height: 1; }
 .suit-tab .ct { font-family: var(--mono); font-size: 9.5px; color: var(--faint); min-height: 11px; }
 .suit-tab.on {
   border-color: rgba(53, 214, 160, 0.5);

@@ -14,7 +14,8 @@
     settings: {
       sound: true,
       haptics: true,
-      showReview: true
+      showReview: true,
+      immersive: false
     }
   };
 
@@ -201,7 +202,7 @@
 
     // Keep preferences when migrating a full backup
     if (data.settings && typeof data.settings === 'object') {
-      ['sound', 'haptics', 'showReview'].forEach(function (k) {
+      ['sound', 'haptics', 'showReview', 'immersive'].forEach(function (k) {
         if (typeof data.settings[k] === 'boolean') state.settings[k] = data.settings[k];
       });
     }

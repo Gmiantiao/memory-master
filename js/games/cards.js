@@ -40,7 +40,7 @@
       if (!probe) return;
       var w = probe.getBoundingClientRect().width;
       if (!w) return;
-      root.style.fontSize = Math.max(7, Math.min(20, w * 0.52)).toFixed(1) + 'px';
+      root.style.fontSize = Math.max(7, Math.min(56, w * 0.58)).toFixed(1) + 'px';
     });
   }
 

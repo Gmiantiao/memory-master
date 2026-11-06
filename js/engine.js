@@ -38,6 +38,10 @@
     }
   };
 
+  /* ---------- 沉浸模式图标 ---------- */
+  var ICON_FS_IN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>';
+  var ICON_FS_OUT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M16 3v3a2 2 0 0 0 2 2h3"/><path d="M8 21v-3a2 2 0 0 0-2-2H3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/></svg>';
+
   /* ---------- 全屏壳 ---------- */
   var host = null;     // .play
   var headEl = null;
@@ -46,12 +50,23 @@
   var clockEl = null;
   var progEl = null;
   var phaseEl = null;
+  var fsBtnEl = null;
+  var controlsTimer = null;
 
   var timer = null;    // {raf, start, duration, onTick, onEnd}
   var session = null;  // 当前会话
 
   function buildShell(game, phaseText) {
     if (host) host.remove();
+
+    var fsBtn = U.el('button.icon-btn.fs-btn', {
+      html: ICON_FS_IN,
+      'aria-label': '全屏沉浸',
+      title: '全屏沉浸',
+      style: { display: 'none' },
+      onclick: toggleImmersive
+    });
+    fsBtnEl = fsBtn;
 
     headEl = U.el('div.play-head', [
       U.el('button.icon-btn', {
@@ -64,6 +79,7 @@
         phaseEl = U.el('div.play-phase', { text: phaseText })
       ]),
       U.el('div.right', [
+        fsBtn,
         clockEl = U.el('div.clock.mono', { text: '00:00' })
       ])
     ]);
@@ -73,6 +89,7 @@
     footEl = U.el('div.play-foot');
 
     host = U.el('div.play', [headEl, bodyEl, footEl]);
+    host.addEventListener('click', onHostClick);
     document.body.appendChild(host);
     return host;
   }
@@ -177,6 +194,87 @@
     wakeLock = null;
   }
 
+  /* ---------- 沉浸模式 ---------- */
+  function requestFullscreen() {
+    var el = document.documentElement;
+    var fn = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (!fn) return;
+    try {
+      var p = fn.call(el);
+      if (p && p.catch) p.catch(function () {});
+    } catch (e) {}
+  }
+
+  function exitFullscreen() {
+    var fn = document.exitFullscreen || document.webkitExitFullscreen;
+    if (!fn) return;
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) return;
+    try { fn.call(document); } catch (e) {}
+  }
+
+  function showControlsTemporarily(ms) {
+    if (!host || !session || !session.immersive) return;
+    host.classList.add('controls-visible');
+    if (controlsTimer) clearTimeout(controlsTimer);
+    controlsTimer = setTimeout(function () {
+      controlsTimer = null;
+      if (host && session && session.immersive) host.classList.remove('controls-visible');
+    }, ms || 2500);
+  }
+
+  function enterImmersive() {
+    if (!session || !host) return;
+    session.immersive = true;
+    host.classList.add('immersive');
+    if (fsBtnEl) {
+      fsBtnEl.innerHTML = ICON_FS_OUT;
+      fsBtnEl.setAttribute('aria-label', '退出全屏沉浸');
+      fsBtnEl.setAttribute('title', '退出全屏沉浸');
+    }
+    requestFullscreen();
+    showControlsTemporarily(2600);
+    U.toast('沉浸模式：点击屏幕显示控制栏');
+  }
+
+  function exitImmersive(doExitFs) {
+    if (session) session.immersive = false;
+    if (host) host.classList.remove('immersive', 'controls-visible');
+    if (controlsTimer) { clearTimeout(controlsTimer); controlsTimer = null; }
+    if (fsBtnEl) {
+      fsBtnEl.innerHTML = ICON_FS_IN;
+      fsBtnEl.setAttribute('aria-label', '全屏沉浸');
+      fsBtnEl.setAttribute('title', '全屏沉浸');
+    }
+    if (doExitFs !== false) exitFullscreen();
+  }
+
+  function toggleImmersive() {
+    if (!session) return;
+    if (session.phase === 'setup' || session.phase === 'result') return;
+    if (session.immersive) exitImmersive();
+    else enterImmersive();
+  }
+
+  function onHostClick(e) {
+    if (!session || !session.immersive || !host) return;
+    if (!host.classList.contains('controls-visible')) {
+      host.classList.add('controls-visible');
+      if (controlsTimer) { clearTimeout(controlsTimer); controlsTimer = null; }
+      return;
+    }
+    var t = e.target;
+    if (t && t.closest && t.closest('input, textarea, button, .slot, .pcard, .rank-btn, .numbtn, .pickable, .modal, .modal-back')) return;
+    host.classList.remove('controls-visible');
+  }
+
+  function onFullscreenChange() {
+    var active = document.fullscreenElement || document.webkitFullscreenElement;
+    if (!active && session && session.immersive) exitImmersive(false);
+  }
+
+  document.addEventListener('fullscreenchange', onFullscreenChange);
+  document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+
   /* ---------- 打开游戏 ---------- */
   E.open = function (gameId) {
     var game = M.games[gameId];
@@ -188,6 +286,7 @@
       game: game,
       preset: game.defaultPreset || 0,
       phase: 'setup',
+      immersive: false,
       hid: 'mm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
     };
     try { history.pushState({ mmPlay: session.hid }, ''); } catch (e) {}
@@ -204,6 +303,7 @@
   E.close = function () {
     stopTimer();
     releaseWake();
+    exitImmersive();
     if (session && session.memoView && session.memoView.cleanup) {
       try { session.memoView.cleanup(); } catch (e) {}
     }
@@ -273,6 +373,7 @@
     setPhase('设置');
     setClock('—', '');
     if (progEl) progEl.style.display = '';
+    if (fsBtnEl) fsBtnEl.style.display = 'none';
     setProgress(0);
 
     var wrap = U.el('div.setup');
@@ -302,6 +403,27 @@
       });
       wrap.appendChild(list);
     }
+
+    // 训练模式：全屏沉浸（全局设置，所有项目共用）
+    var s = Store.settings();
+    var immOn = !!s.immersive;
+    var modeBtn = U.el('button.mode-toggle' + (immOn ? '.on' : ''), {
+      type: 'button',
+      onclick: function () {
+        immOn = !immOn;
+        s.immersive = immOn;
+        Store.set('immersive', immOn);
+        modeBtn.classList.toggle('on', immOn);
+      }
+    }, [
+      U.el('div', { style: { flex: '1', minWidth: '0' } }, [
+        U.el('div.mode-title', { text: '全屏沉浸模式' }),
+        U.el('div.mode-desc', { text: '只显示题目，隐藏计时栏和按钮；点击屏幕显示控制栏' })
+      ]),
+      U.el('span.mode-knob')
+    ]);
+    wrap.appendChild(U.el('div.field-label', { text: '训练模式', style: { marginTop: '22px' } }));
+    wrap.appendChild(modeBtn);
 
     if (game.setupExtra) {
       var ex = game.setupExtra(session.preset);
@@ -339,6 +461,7 @@
     session.phase = 'memorize';
 
     renderMemo();
+    if (Store.settings().immersive) enterImmersive();
   }
 
   /* ---------- 记忆阶段 ---------- */
@@ -350,6 +473,7 @@
     U.clear(footEl);
     setPhase(memoSec ? '记忆阶段' : '记忆阶段 · 不限时');
     keepAwake();
+    if (fsBtnEl) fsBtnEl.style.display = '';
     if (progEl) progEl.style.display = memoSec ? '' : 'none';
 
     var wrap = U.el('div.memo-wrap');
@@ -415,7 +539,9 @@
     U.clear(footEl);
     setPhase('回忆阶段');
     keepAwake();
+    if (fsBtnEl) fsBtnEl.style.display = '';
     if (progEl) progEl.style.display = 'none';
+    if (session.immersive) showControlsTemporarily(2600);
     setClock('00:00');
 
     var wrap = U.el('div.recall-wrap');
@@ -461,6 +587,9 @@
   /* ---------- 结算 ---------- */
   function renderResult(result) {
     var game = session.game, cfg = session.cfg;
+
+    exitImmersive();
+    if (fsBtnEl) fsBtnEl.style.display = 'none';
 
     U.clear(bodyEl);
     U.clear(footEl);
