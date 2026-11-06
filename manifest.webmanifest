@@ -1,0 +1,31 @@
+{
+  "name": "记忆大师 · 脑力竞技训练",
+  "short_name": "记忆大师",
+  "description": "世界记忆锦标赛十大项目训练工具，记忆与回忆双阶段计时，数据只存在本机。",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0a0d13",
+  "theme_color": "#0a0d13",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

@@ -30,6 +30,25 @@
     try { window.speechSynthesis.speak(u); } catch (e) {}
   }
 
+  // iOS only unlocks speech synthesis inside a user gesture. Speak a silent
+  // utterance on the click, then the real digits can be scheduled later.
+  function primeSpeech() {
+    if (!ttsOK) return;
+    try {
+      var u = new window.SpeechSynthesisUtterance(' ');
+      u.lang = 'zh-CN';
+      u.rate = 1;
+      u.volume = 0;
+      window.speechSynthesis.speak(u);
+    } catch (e) {}
+  }
+
+  if (ttsOK) {
+    try {
+      window.speechSynthesis.addEventListener('voiceschanged', pickVoice);
+    } catch (e) {}
+  }
+
   /* ---------- 记忆视图（播放器） ---------- */
   function memoView(data, cfg) {
     var total = data.digits.length;
@@ -82,6 +101,7 @@
       if (window.speechSynthesis) {
         try { window.speechSynthesis.cancel(); } catch (e) {}
         pickVoice();
+        primeSpeech();
       }
 
       // 第一声稍作延迟，给用户准备时间

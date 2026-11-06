@@ -55,9 +55,7 @@
     for (var d = 0; d < data.decks; d++) {
       var sub = data.cards.slice(d * 52, d * 52 + 52);
       var grid = U.el('div.rows-grid');
-      grid.style.display = 'grid';
-      grid.style.gridTemplateColumns = 'repeat(' + cols + ', 1fr)';
-      grid.style.gap = '4px';
+      grid.style.setProperty('--cols', cols);
       sub.forEach(function (cid) {
         grid.appendChild(cardEl(DECK[cid]));
       });
@@ -82,6 +80,7 @@
     DECK.forEach(function (c) { poolLeft[c.i] = deckCount; });
 
     var el = U.el('div', { style: { width: '100%' } });
+    el.style.setProperty('--cols', cols);
 
     /* 工具条 */
     var info = U.el('div.memo-badge', { text: '已填 0 / ' + n + ' 张' });
@@ -110,7 +109,6 @@
 
     /* 槽位 */
     var slotWrap = U.el('div.card-slots');
-    slotWrap.style.gridTemplateColumns = 'repeat(' + cols + ', 1fr)';
     var slotEls = [];
     for (var i = 0; i < n; i++) {
       (function (idx) {
@@ -122,10 +120,46 @@
     }
     el.appendChild(slotWrap);
 
-    /* 牌池 */
-    el.appendChild(U.el('div.field-label', { text: '点牌 → 填入当前位置；点已填的格子可取回', style: { marginTop: '20px' } }));
+    /* 手机：花色 + 点数选择器（大按钮，避免在 13 列小牌里点错） */
+    var pickedSuit = 0;
+    var suitBtns = [], rankBtns = [];
+    var picker = U.el('div.card-picker');
+    picker.appendChild(U.el('div.field-label', { text: '选花色 → 选点数', style: { marginTop: '16px' } }));
+
+    var suitRow = U.el('div.suit-tabs');
+    SUITS.forEach(function (su, si) {
+      var b = U.el('button.suit-tab' + (si === 0 ? '.on' : ''), {
+        type: 'button',
+        onclick: function () { pickedSuit = si; renderAll(); }
+      }, [
+        U.el('span.ss', { text: su.s, style: { color: su.c === 'red' ? 'var(--red)' : 'var(--txt)' } }),
+        U.el('span.lb', { text: ['黑桃', '红桃', '方块', '梅花'][si] }),
+        U.el('span.ct', { text: '' })
+      ]);
+      suitBtns.push(b);
+      suitRow.appendChild(b);
+    });
+    picker.appendChild(suitRow);
+
+    var rankWrap = U.el('div.rank-grid');
+    RANKS.forEach(function (rk, ri) {
+      var b = U.el('button.rank-btn', {
+        type: 'button',
+        onclick: function () { place(pickedSuit * 13 + ri); }
+      }, [
+        U.el('span.rk', { text: rk }),
+        U.el('span.left', { text: '' })
+      ]);
+      rankBtns.push(b);
+      rankWrap.appendChild(b);
+    });
+    picker.appendChild(rankWrap);
+    el.appendChild(picker);
+
+    /* 牌池（桌面端） */
+    var poolBox = U.el('div.card-pool');
+    poolBox.appendChild(U.el('div.field-label', { text: '点牌 → 填入当前位置；点已填的格子可取回', style: { marginTop: '20px' } }));
     var poolWrap = U.el('div.card-deck');
-    poolWrap.style.gridTemplateColumns = 'repeat(' + cols + ', 1fr)';
     var poolEls = {};
     U.shuffle(DECK).forEach(function (c) {
       var pe = cardEl(c, 'pickable');
@@ -133,7 +167,8 @@
       poolEls[c.i] = pe;
       poolWrap.appendChild(pe);
     });
-    el.appendChild(poolWrap);
+    poolBox.appendChild(poolWrap);
+    el.appendChild(poolBox);
 
     fitFont(el);
 
@@ -187,6 +222,22 @@
         pe.classList.toggle('used', left <= 0);
         pe.style.opacity = left <= 0 ? '' : (left === 1 ? '1' : '0.68');
       });
+
+      // Mobile suit + rank picker
+      suitBtns.forEach(function (b, si) {
+        b.classList.toggle('on', si === pickedSuit);
+        var left = 0;
+        for (var ri = 0; ri < 13; ri++) left += poolLeft[si * 13 + ri];
+        b.querySelector('.ct').textContent = deckCount > 1 ? String(left) : '';
+      });
+      rankBtns.forEach(function (b, ri) {
+        var cid = pickedSuit * 13 + ri;
+        var left = poolLeft[cid];
+        b.classList.toggle('used', left <= 0);
+        b.classList.toggle('red', DECK[cid].c === 'red');
+        b.querySelector('.left').textContent = deckCount > 1 && left > 0 ? '×' + left : '';
+      });
+
       fitFont(el);
     }
 

@@ -7,6 +7,10 @@
   M.games = M.games || {};
 
   /* ---------- 数字网格渲染（每 chunk 位一组，组间留白） ---------- */
+  var CHAR_EM = 0.62;          // monospace digit advance
+  var IN_GROUP_GAP_EM = 0.12;  // keep digits inside a group tight
+  var GROUP_GAP_PX = 9;        // the gap that marks a group boundary
+
   function renderGrid(data, cfg) {
     var chunk = cfg.chunk || 4;
     var grid = U.el('div.numgrid');
@@ -15,15 +19,15 @@
     data.rows.forEach(function (row) {
       var rowEl = U.el('div.numrow');
       rowEl.style.display = 'flex';
-      rowEl.style.gap = '9px';
+      rowEl.style.gap = GROUP_GAP_PX + 'px';
+      rowEl.style.justifyContent = 'center';
       for (var i = 0; i < row.length; i += chunk) {
         var seg = row.slice(i, i + chunk);
         var c = U.el('div');
         c.style.display = 'grid';
-        c.style.flex = '1 1 0';
-        c.style.minWidth = '0';
-        c.style.gridTemplateColumns = 'repeat(' + seg.length + ', 1fr)';
-        c.style.gap = '1px';
+        c.style.flex = '0 0 auto';
+        c.style.gridTemplateColumns = 'repeat(' + seg.length + ', ' + CHAR_EM + 'em)';
+        c.style.gap = IN_GROUP_GAP_EM + 'em';
         for (var j = 0; j < seg.length; j++) {
           c.appendChild(U.el('span', { text: seg[j] }));
         }
@@ -34,18 +38,29 @@
 
     // 自适应字号
     requestAnimationFrame(function () { fitGrid(grid, cfg.cols, chunk); });
-    return grid;
+
+    // Re-fit on rotation / window resize while this view is mounted
+    function onResize() {
+      if (!grid.isConnected) { window.removeEventListener('resize', onResize); return; }
+      fitGrid(grid, cfg.cols, chunk);
+    }
+    window.addEventListener('resize', onResize);
+
+    return {
+      grid: grid,
+      cleanup: function () { window.removeEventListener('resize', onResize); }
+    };
   }
 
   function fitGrid(grid, cols, chunk) {
-    var w = grid.clientWidth || 320;
+    // The grid is auto-width now, so measure the available parent width
+    var host = grid.parentNode;
+    var w = (host && host.clientWidth) || grid.clientWidth || 320;
     if (!w) return;
     var groups = Math.ceil(cols / chunk);
-    var groupGap = 9;
-    var groupW = (w - groupGap * (groups - 1)) / groups;
-    var charW = (groupW - (chunk - 1)) / chunk;
-    // 等宽字符宽约 0.62em
-    var fs = Math.max(8, Math.min(30, charW / 0.62));
+    var gaps = GROUP_GAP_PX * (groups - 1);
+    var em = cols * CHAR_EM + Math.max(0, cols - groups) * IN_GROUP_GAP_EM;
+    var fs = Math.max(8, Math.min(30, ((w - gaps) / em) * 0.99));
     grid.style.fontSize = fs.toFixed(1) + 'px';
   }
 
@@ -147,12 +162,13 @@
       },
 
       memo: function (data, cfg) {
-        var box = U.el('div', { style: { width: '100%' } });
+        var box = U.el('div.digit-memo', { style: { width: '100%' } });
         box.appendChild(U.el('div.memo-badge', {
           text: data.rows.length + ' 行 × ' + data.cols + ' 位 · 共 ' + (data.rows.length * data.cols) + ' 个' + (cfg.mode === 'binary' ? '二进制位' : '数字')
         }));
-        box.appendChild(renderGrid(data, cfg));
-        return box;
+        var gridView = renderGrid(data, cfg);
+        box.appendChild(gridView.grid);
+        return { el: box, cleanup: gridView.cleanup };
       },
 
       recallNote: '按行作答，每行必须完全正确才计分。输入满一行会自动跳到下一行。',

@@ -160,14 +160,52 @@
   S.importJSON = function (text) {
     var data = JSON.parse(text);
     if (!data || !Array.isArray(data.records)) throw new Error('格式不正确：缺少 records 数组');
+
+    function num(v, d) { return typeof v === 'number' && isFinite(v) ? v : d; }
+    function sig(r) {
+      return r.id ? 'id:' + r.id : [r.gid, r.at, r.score, r.correct, r.total, r.preset].join('|');
+    }
+
     var added = 0, seen = {};
-    state.records.forEach(function (r) { seen[r.id] = true; });
+    state.records.forEach(function (r) {
+      seen[sig(r)] = true;
+      // Also remember the content signature, so importing the same
+      // id-less file again does not duplicate it
+      seen[[r.gid, r.at, r.score, r.correct, r.total, r.preset].join('|')] = true;
+    });
+
     data.records.forEach(function (r) {
-      if (!r || !r.gid || typeof r.score !== 'number') return;
-      if (r.id && seen[r.id]) return;
-      state.records.push(r);
+      if (!r || !r.gid || typeof r.score !== 'number' || !isFinite(r.score)) return;
+
+      var srcAt = num(r.at, null);
+      var rec = {
+        id: r.id || (Date.now().toString(36) + Math.random().toString(36).slice(2, 7)),
+        at: srcAt === null ? Date.now() : srcAt,
+        gid: String(r.gid),
+        score: Number(r.score),
+        correct: num(r.correct, 0),
+        total: num(r.total, 0),
+        memoMs: num(r.memoMs, 0),
+        recallMs: num(r.recallMs, 0),
+        preset: r.preset ? String(r.preset) : ''
+      };
+
+      // Dedupe on the source record, before assigning a fresh id
+      var key = r.id ? 'id:' + r.id
+        : [rec.gid, srcAt === null ? '' : srcAt, rec.score, rec.correct, rec.total, rec.preset].join('|');
+      if (seen[key]) return;
+      seen[key] = true;
+      state.records.push(rec);
       added++;
     });
+
+    // Keep preferences when migrating a full backup
+    if (data.settings && typeof data.settings === 'object') {
+      ['sound', 'haptics', 'showReview'].forEach(function (k) {
+        if (typeof data.settings[k] === 'boolean') state.settings[k] = data.settings[k];
+      });
+    }
+
     state.records.sort(function (a, b) { return a.at - b.at; });
     persist(true);
     return added;

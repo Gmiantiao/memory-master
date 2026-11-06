@@ -174,6 +174,8 @@
         info.textContent = '已填 ' + filled + ' / ' + data.faces.length;
       });
       inp.addEventListener('keydown', function (e) {
+        // Enter is also how CJK IMEs confirm a candidate; don't steal it
+        if (e.isComposing || e.keyCode === 229) return;
         if (e.key === 'Enter') { e.preventDefault(); if (inputs[i + 1]) inputs[i + 1].focus(); }
       });
       inputs.push(inp);

@@ -79,6 +79,7 @@ index.html?g=speedcards
 
 - 不会上传到任何服务器
 - 换设备、清理浏览器数据、使用无痕模式都会丢失
+- iOS Safari 可能回收长期未访问站点的本地存储，建议定期导出备份
 - 设置里可以**导出 JSON 备份**，在另一台设备上导入即可迁移
 - 导出文件就是明文 JSON，可以自己处理
 
@@ -104,7 +105,10 @@ index.html?g=speedcards
 
 ```
 index.html
+manifest.webmanifest
+sw.js           离线缓存（Service Worker）
 css/style.css
+icons/          PWA / 主屏图标
 js/
   utils.js      工具函数
   store.js      localStorage 封装
@@ -117,6 +121,9 @@ js/
 - 头像与抽象图形由 SVG 程序化生成，不依赖任何图片资源
 - 听记数字使用 Web Speech API
 - 计时基于 `performance.now()`，切到后台不会失真
+- 记忆 / 回忆阶段申请 Screen Wake Lock，避免长时训练被锁屏打断
+- 训练层写入 history，手机返回键/侧滑会先弹出退出确认，而不是直接离开页面
+- 修改 `css/` 或 `js/` 后，记得把 `sw.js` 里的 `CACHE` 版本号加一，确保已安装的 PWA 更新缓存
 
 ---
 

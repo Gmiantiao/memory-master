@@ -104,12 +104,19 @@
     var t0 = performance.now();
     var duration = opts.duration || 0;
     var lastSec = -1;
+    var pausedTotal = 0;
+    var pausedAt = 0;
 
-    timer = { raf: 0, start: t0, duration: duration, getStop: null };
+    timer = { raf: 0, start: t0, duration: duration, getStop: null, pause: null, resume: null };
+
+    function elapsed() {
+      var now = performance.now();
+      return now - t0 - pausedTotal - (pausedAt ? now - pausedAt : 0);
+    }
 
     function frame() {
       if (!timer) return;
-      var el = performance.now() - t0;
+      var el = elapsed();
       var remain = duration ? Math.max(0, duration - el) : 0;
       var frac = duration ? remain / duration : 0;
 
@@ -130,36 +137,105 @@
       timer.raf = requestAnimationFrame(frame);
     }
     timer.raf = requestAnimationFrame(frame);
-    timer.getStop = function () { return performance.now() - t0; };
+    timer.getStop = elapsed;
+
+    timer.pause = function () {
+      if (!timer || pausedAt) return;
+      pausedAt = performance.now();
+      cancelAnimationFrame(timer.raf);
+      timer.raf = 0;
+    };
+    timer.resume = function () {
+      if (!timer || !pausedAt) return;
+      pausedTotal += performance.now() - pausedAt;
+      pausedAt = 0;
+      timer.raf = requestAnimationFrame(frame);
+    };
   }
 
+  function pauseTimer() { if (timer && timer.pause) timer.pause(); }
+  function resumeTimer() { if (timer && timer.resume) timer.resume(); }
+
   function elapsedNow() { return timer && timer.getStop ? timer.getStop() : 0; }
+
+  /* ---------- 屏幕常亮 ---------- */
+  var wakeLock = null;
+
+  function keepAwake() {
+    if (!navigator.wakeLock || wakeLock) return;
+    try {
+      navigator.wakeLock.request('screen').then(function (lock) {
+        wakeLock = lock;
+        lock.addEventListener('release', function () { wakeLock = null; });
+      }).catch(function () {});
+    } catch (e) {}
+  }
+
+  function releaseWake() {
+    if (!wakeLock) return;
+    try { wakeLock.release(); } catch (e) {}
+    wakeLock = null;
+  }
 
   /* ---------- 打开游戏 ---------- */
   E.open = function (gameId) {
     var game = M.games[gameId];
     if (!game) { U.toast('未找到该项目'); return; }
-    session = { game: game, preset: game.defaultPreset || 0, phase: 'setup' };
+    if (host) return; // a session is already open (e.g. deep link race)
+    stopTimer();
+    releaseWake();
+    session = {
+      game: game,
+      preset: game.defaultPreset || 0,
+      phase: 'setup',
+      hid: 'mm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
+    };
+    try { history.pushState({ mmPlay: session.hid }, ''); } catch (e) {}
+    document.body.classList.add('playing');
+
+    // A toast from the home page should not sit on top of the training UI
+    var toast = document.getElementById('toast');
+    if (toast) toast.classList.remove('show');
+
     buildShell(game, '设置');
     renderSetup();
   };
 
   E.close = function () {
     stopTimer();
+    releaseWake();
+    if (session && session.memoView && session.memoView.cleanup) {
+      try { session.memoView.cleanup(); } catch (e) {}
+    }
     if (session && session.game && session.game.cleanup) {
       try { session.game.cleanup(); } catch (e) {}
     }
+    var hid = session && session.hid;
     if (host) { host.remove(); host = null; }
+    document.body.classList.remove('playing');
     session = null;
+
+    // Drop the history entry pushed on open. If the user already went back
+    // (popstate path), history.state no longer carries our id.
+    if (hid && history.state && history.state.mmPlay === hid) {
+      try { history.back(); } catch (e) {}
+    }
+
     if (M.App && M.App.afterPlay) M.App.afterPlay();
   };
 
-  E.confirmExit = function () {
-    if (!session || session.phase === 'result' || session.phase === 'setup') {
+  var exitDialogOpen = false;
+
+  E.confirmExit = function (fromHistory) {
+    if (!session) return;
+    if (session.phase === 'result' || session.phase === 'setup') {
       E.close();
       return;
     }
-    // 不暂停计时：真实比赛里时间不会等人
+    if (exitDialogOpen) return;
+    exitDialogOpen = true;
+    pauseTimer(); // don't let the countdown fire behind the dialog
+
     U.confirm({
       title: '结束本次训练？',
       text: '当前训练尚未完成，中途退出不会保存成绩。',
@@ -167,9 +243,27 @@
       cancel: '继续训练',
       danger: true
     }).then(function (yes) {
-      if (yes) E.close();
+      exitDialogOpen = false;
+      if (yes) { E.close(); return; }
+      if (fromHistory && session) {
+        try { history.pushState({ mmPlay: session.hid }, ''); } catch (e) {}
+      }
+      resumeTimer();
     });
   };
+
+  window.addEventListener('popstate', function (e) {
+    if (!host || !session) return;
+    if (e.state && e.state.mmPlay === session.hid) return;
+    E.confirmExit(true);
+  });
+
+  window.addEventListener('beforeunload', function (e) {
+    if (host && session && session.phase !== 'result' && session.phase !== 'setup') {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
 
   /* ---------- 设置阶段 ---------- */
   function renderSetup() {
@@ -178,6 +272,7 @@
     U.clear(footEl);
     setPhase('设置');
     setClock('—', '');
+    if (progEl) progEl.style.display = '';
     setProgress(0);
 
     var wrap = U.el('div.setup');
@@ -254,6 +349,8 @@
     U.clear(bodyEl);
     U.clear(footEl);
     setPhase(memoSec ? '记忆阶段' : '记忆阶段 · 不限时');
+    keepAwake();
+    if (progEl) progEl.style.display = memoSec ? '' : 'none';
 
     var wrap = U.el('div.memo-wrap');
     var content = game.memo(data, cfg);
@@ -279,7 +376,6 @@
             setClock(U.clock(remain), level);
           } else {
             setClock(U.clock(el));
-            setProgress((el % 60000) / 60000);
           }
         },
         onEnd: function (el) { finishMemo(el); }
@@ -300,11 +396,12 @@
   }
 
   function finishMemo(usedMs) {
-    stopTimer();
     session.memoMs = usedMs || elapsedNow();
+    stopTimer();
     if (session.memoView && session.memoView.cleanup) {
       try { session.memoView.cleanup(); } catch (e) {}
     }
+    session.memoView = null;
     E.sfx.end();
     session.phase = 'recall';
     renderRecall();
@@ -317,7 +414,8 @@
     U.clear(bodyEl);
     U.clear(footEl);
     setPhase('回忆阶段');
-    setProgress(0);
+    keepAwake();
+    if (progEl) progEl.style.display = 'none';
     setClock('00:00');
 
     var wrap = U.el('div.recall-wrap');
@@ -344,7 +442,7 @@
 
     startTimer({
       duration: 0,
-      onTick: function (el) { setClock(U.clock(el)); setProgress((el % 120000) / 120000); }
+      onTick: function (el) { setClock(U.clock(el)); }
     });
 
     session.getAnswer = view.getAnswer;
@@ -367,6 +465,8 @@
     U.clear(bodyEl);
     U.clear(footEl);
     setPhase('结果');
+    releaseWake();
+    if (progEl) progEl.style.display = '';
     setProgress(1);
     setClock(U.clock(session.recallMs || 0));
 
@@ -465,10 +565,11 @@
     if (e.key === 'Escape') E.confirmExit();
   });
 
-  /* ---------- 切后台时刷新时间 ---------- */
+  /* ---------- 切回前台时重新申请屏幕常亮 ---------- */
   document.addEventListener('visibilitychange', function () {
-    if (!document.hidden && timer) {
-      // 让 raf 继续即可，时间基于 performance.now 自然正确
+    if (!document.hidden && host && session &&
+      (session.phase === 'memorize' || session.phase === 'recall')) {
+      keepAwake();
     }
   });
 

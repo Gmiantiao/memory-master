@@ -22,30 +22,34 @@
   function shell(opts) {
     U.clear(appEl);
     var bar = U.el('header.topbar', [
-      U.el('div.brand', [
-        U.el('div.brand-mark', { text: 'M' }),
-        U.el('div', [
-          U.el('div.brand-name', { text: '记忆大师' }),
-          U.el('div.brand-sub', { text: 'Memory Master' })
-        ])
-      ]),
-      opts && opts.back
-        ? U.el('button.icon-btn', { html: ICON_BACK, 'aria-label': '返回', onclick: function () { location.hash = '#/'; } })
-        : null,
-      U.el('button.icon-btn', { html: ICON_REC, 'aria-label': '记录', onclick: function () { location.hash = '#/records'; } }),
-      U.el('button.icon-btn', { html: ICON_SET, 'aria-label': '设置', onclick: openSettings })
+      U.el('div.topbar-inner', [
+        U.el('div.brand', [
+          U.el('div.brand-mark', { text: 'M' }),
+          U.el('div', [
+            U.el('div.brand-name', { text: '记忆大师' }),
+            U.el('div.brand-sub', { text: 'Memory Master' })
+          ])
+        ]),
+        opts && opts.back
+          ? U.el('button.icon-btn', { html: ICON_BACK, 'aria-label': '返回', onclick: function () { location.hash = '#/'; } })
+          : null,
+        U.el('button.icon-btn', { html: ICON_REC, 'aria-label': '记录', onclick: function () { location.hash = '#/records'; } }),
+        U.el('button.icon-btn', { html: ICON_SET, 'aria-label': '设置', onclick: openSettings })
+      ])
     ]);
 
     var page = U.el('div.page');
     appEl.appendChild(bar);
     appEl.appendChild(page);
 
-    window.addEventListener('scroll', function () {
-      bar.classList.toggle('scrolled', window.scrollY > 8);
-    }, { passive: true });
-
     return page;
   }
+
+  // One listener for the whole app; the bar is recreated on each route change.
+  window.addEventListener('scroll', function () {
+    var bar = document.querySelector('.topbar');
+    if (bar) bar.classList.toggle('scrolled', window.scrollY > 8);
+  }, { passive: true });
 
   /* ---------- 首页 ---------- */
   function renderHome() {
@@ -266,6 +270,11 @@
   }
 
   /* ---------- 设置 ---------- */
+  function refreshAfterDataChange() {
+    if (currentRoute === '/records') renderRecords();
+    else renderHome();
+  }
+
   function openSettings() {
     var root = document.getElementById('modal-root');
     var s = Store.settings();
@@ -324,11 +333,25 @@
     row.appendChild(U.el('button.btn.btn-sm', {
       text: '导出备份',
       onclick: function () {
-        var blob = new Blob([Store.exportJSON()], { type: 'application/json' });
+        var json = Store.exportJSON();
+        var name = 'memory-master-' + U.dateKey(Date.now()) + '.json';
+        var blob = new Blob([json], { type: 'application/json' });
+
+        // iOS standalone / share sheet: a.download is unreliable there
+        var file = null;
+        try { file = new File([blob], name, { type: 'application/json' }); } catch (e) {}
+        var isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+        if (isIOS && file && navigator.canShare && navigator.canShare({ files: [file] })) {
+          navigator.share({ files: [file], title: '记忆大师备份' }).then(function () {
+            U.toast('备份已分享');
+          }).catch(function () {});
+          return;
+        }
+
         var url = URL.createObjectURL(blob);
         var a = document.createElement('a');
         a.href = url;
-        a.download = 'memory-master-' + U.dateKey(Date.now()) + '.json';
+        a.download = name;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -347,7 +370,7 @@
           var n = Store.importJSON(String(rd.result));
           U.toast('已导入 ' + n + ' 条记录');
           close();
-          renderRecords();
+          refreshAfterDataChange();
         } catch (e) {
           U.toast('导入失败：' + e.message);
         }
@@ -372,7 +395,7 @@
           if (!yes) return;
           Store.clearAll();
           U.toast('已清空');
-          renderRecords();
+          refreshAfterDataChange();
         });
       }
     }));
@@ -381,7 +404,7 @@
     // 开关
     box.appendChild(U.el('div.field-label', { text: '偏好' }));
     box.appendChild(toggleRow('音效', 'sound', '阶段切换与倒计时的提示音'));
-    box.appendChild(toggleRow('震动反馈', 'haptics', '填牌等操作时的轻震（支持的设备）'));
+    box.appendChild(toggleRow('震动反馈', 'haptics', '填牌等操作时的轻震（部分安卓设备支持）'));
     box.appendChild(toggleRow('显示逐项复查', 'showReview', '结算页列出每一行的对错对照'));
 
     box.appendChild(U.el('div', {
@@ -416,8 +439,7 @@
   M.App = {
     afterPlay: function () {
       // 训练结束后刷新当前视图，让 PB 立即更新
-      if (currentRoute === '/records') renderRecords();
-      else renderHome();
+      refreshAfterDataChange();
     }
   };
 
@@ -434,8 +456,22 @@
     } catch (e) {}
   })();
 
-  /* 首次进入的提示 */
+  /* 首次进入的提示（不要把 toast 盖在已经打开的训练页上） */
   if (!Store.all().length) {
-    setTimeout(function () { U.toast('选一个项目，开始第一次训练'); }, 700);
+    setTimeout(function () {
+      if (currentRoute === '/' && !document.querySelector('.play')) {
+        U.toast('选一个项目，开始第一次训练');
+      }
+    }, 700);
   }
+
+  /* Service worker：HTTPS 或本地调试时启用离线缓存 */
+  (function () {
+    if (!('serviceWorker' in navigator)) return;
+    var host = location.hostname;
+    if (location.protocol !== 'https:' && host !== 'localhost' && host !== '127.0.0.1') return;
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js').catch(function () {});
+    });
+  })();
 })(window.MM);

@@ -160,9 +160,13 @@ window.MM = window.MM || {};
 
   U.$ = function (sel, root) { return (root || document).querySelector(sel); };
 
-  /** 手机震动反馈 */
+  /** 手机震动反馈（遵守设置里的开关） */
   U.buzz = function (ms) {
-    try { if (navigator.vibrate) navigator.vibrate(ms || 8); } catch (e) {}
+    try {
+      var st = M.Store && M.Store.settings ? M.Store.settings() : null;
+      if (st && st.haptics === false) return;
+      if (navigator.vibrate) navigator.vibrate(ms || 8);
+    } catch (e) {}
   };
 
   /* ---------- Toast ---------- */

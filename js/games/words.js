@@ -71,12 +71,16 @@
           style: { fontSize: '15px', letterSpacing: '0.02em', padding: '9px 11px' }
         });
         inp.addEventListener('input', function () {
-          inp.value = inp.value.replace(/\s+/g, '');
+          // Only rewrite when needed; assigning during IME composition breaks it in Safari
+          var v = inp.value.replace(/\s+/g, '');
+          if (v !== inp.value) inp.value = v;
           var filled = 0;
           inputs.forEach(function (x) { if (x.value.trim()) filled++; });
           info.textContent = '已填 ' + filled + ' / ' + n;
         });
         inp.addEventListener('keydown', function (e) {
+          // Enter is also how CJK IMEs confirm a candidate; don't steal it
+          if (e.isComposing || e.keyCode === 229) return;
           if (e.key === 'Enter') {
             e.preventDefault();
             if (idx + 1 < n) inputs[idx + 1].focus();
